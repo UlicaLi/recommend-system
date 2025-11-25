@@ -11,7 +11,9 @@ dependencies = [
     "scipy>=1.10.0",
     "pymysql>=1.1.0",
     "cryptography>=41.0.0", # 某些MySQL连接需要
-    "tqdm>=4.66.0",         # 进度条
+    "tqdm>=4.66.0", # 进度条
     "python-dotenv>=1.0.0", # 环境变量管理
-    "redis>=5.0.0"          # Redis 客户端
+    "redis>=5.0.0", # Redis 客户端
+    "fastapi>=0.100.0", # Web 框架 # ASGI 服务器
+    "uvicorn>=0.20.0",
 ]

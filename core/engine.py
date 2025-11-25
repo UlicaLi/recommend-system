@@ -25,6 +25,12 @@ class RecommendationEngine:
         self.user_history_index = sorted_df.groupby('user_id')['object_id'].apply(list).to_dict()
         logger.info(f"用户索引构建完成，覆盖 {len(self.user_history_index)} 位用户")
 
+        # 构建全局热门物品列表 (按总分降序)
+        logger.info("正在计算全局热门物品...")
+        popular_series = self.history_df.groupby('object_id')['score'].sum().sort_values(ascending=False)
+        self.popular_items = popular_series.index.tolist()
+        logger.info(f"热门物品计算完成，Top 5: {self.popular_items[:5]}")
+
         # 初始化 ALS 模型
         self.model = implicit.als.AlternatingLeastSquares(
             factors=settings.ALS_FACTORS,
@@ -88,6 +94,12 @@ class RecommendationEngine:
         except Exception as e:
             logger.error(f"获取猜你喜欢失败 User {user_id}: {e}")
             return []
+
+    def get_popular_items(self, limit: int = 10) -> List[int]:
+        """
+        获取全局热门物品 (基于总分)
+        """
+        return self.popular_items[:limit]
 
     def get_related_items(self, item_id: int) -> List[int]:
         """

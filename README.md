@@ -19,6 +19,11 @@
 3.  **相关推荐 (Item-to-Item)**
     *   **场景**: 工具详情页 "看了这个的人也看了..."。
     *   **逻辑**: 基于 ALS 模型生成的物品隐向量，计算 **余弦相似度 (Cosine Similarity)**，找出语义上最相似的工具集合。
+    
+4.  **热门推荐 (Popular Items)**
+    *   **场景**: 冷启动 (新用户、无历史记录的用户) / 全局热门展示。
+    *   **逻辑**: 基于所有用户历史行为数据，按工具的总交互分数进行降序排序。
+    *   **特点**: 预计算并存储，用于提供默认或广泛受欢迎的推荐。
 
 ## 🛠 技术架构
 
@@ -53,8 +58,9 @@
 # 使用 pip
 pip install .
 
-# 或直接安装依赖
-pip install sqlalchemy pandas implicit scipy pymysql redis python-dotenv tqdm
+# 使用uv
+uv venv
+uv sync
 ```
 
 ### 2. 环境变量配置
@@ -79,8 +85,10 @@ python main.py
 *   **用户-历史**: `rec:sys:user:{user_id}:history` (value: `[item_id_1, item_id_2, ...]`)
 *   **用户-发现**: `rec:sys:user:{user_id}:discovery`
 *   **物品-相关**: `rec:sys:item:{item_id}:related`
+*   **全局-热门**: `rec:sys:global:popular`
 
 ## 📈 性能优化
 
 *   **查询优化**: 使用 Hash Map 替代 DataFrame 过滤，实现 O(1) 的用户历史查询。
 *   **批量写入**: 使用 Redis Pipeline 技术，大幅降低网络 RTT，提升大规模数据落库速度。
+*   **数据类型兼容**: 在写入 Redis 前，将 Pandas/NumPy 产生的 `int64` 等数据类型统一转换为 Python 原生 `int`，确保 Redis 存储的稳定性与兼容性，避免数据类型错误。

@@ -2,11 +2,11 @@ import sys
 import time
 import redis
 from typing import List, Dict
-from core.data_loader import DataLoader
+from core.dataloader import DataLoader
 from core.engine import RecommendationEngine
 from config.settings import logger, settings
 
-def save_results_to_redis(user_recs: Dict[int, Dict[str, List[int]]], item_recs: Dict[int, List[int]]):
+def save_results_to_redis(user_recs: Dict[int, Dict[str, List[int]]], item_recs: Dict[int, List[int]], popular_items: List[int]):
     """
     将结果写入 Redis。使用 Pipeline 提高吞吐量。
     User Recs Keys:
@@ -14,12 +14,17 @@ def save_results_to_redis(user_recs: Dict[int, Dict[str, List[int]]], item_recs:
       - rec:sys:user:{uid}:discovery -> List[ItemID]
     Item Recs Keys:
       - rec:sys:item:{iid}:related -> List[ItemID]
+    Global Recs Keys:
+      - rec:sys:global:popular -> List[ItemID]
     """
     logger.info(f"正在保存推荐结果到 Redis ({settings.REDIS_URL})...")
     
     try:
         r = redis.from_url(settings.REDIS_URL, decode_responses=True)
         pipe = r.pipeline()
+        
+        def to_native(items):
+            return [int(x) for x in items]
         
         # 1. 保存用户推荐
         logger.info(f"保存 {len(user_recs)} 位用户的推荐列表")
@@ -28,14 +33,14 @@ def save_results_to_redis(user_recs: Dict[int, Dict[str, List[int]]], item_recs:
             key_hist = f"{settings.REDIS_KEY_PREFIX}user:{uid}:history"
             pipe.delete(key_hist)
             if recs['history']:
-                pipe.rpush(key_hist, *recs['history'])
+                pipe.rpush(key_hist, *to_native(recs['history']))
                 pipe.expire(key_hist, settings.REDIS_EXPIRE_SECONDS)
             
             # Discovery
             key_disc = f"{settings.REDIS_KEY_PREFIX}user:{uid}:discovery"
             pipe.delete(key_disc)
             if recs['discovery']:
-                pipe.rpush(key_disc, *recs['discovery'])
+                pipe.rpush(key_disc, *to_native(recs['discovery']))
                 pipe.expire(key_disc, settings.REDIS_EXPIRE_SECONDS)
         
         # 2. 保存物品相关推荐
@@ -44,8 +49,16 @@ def save_results_to_redis(user_recs: Dict[int, Dict[str, List[int]]], item_recs:
             key_related = f"{settings.REDIS_KEY_PREFIX}item:{iid}:related"
             pipe.delete(key_related)
             if related_ids:
-                pipe.rpush(key_related, *related_ids)
+                pipe.rpush(key_related, *to_native(related_ids))
                 pipe.expire(key_related, settings.REDIS_EXPIRE_SECONDS)
+
+        # 3. 保存全局热门推荐 (用于冷启动)
+        if popular_items:
+            logger.info(f"保存全局热门推荐 ({len(popular_items)} 个)")
+            key_pop = f"{settings.REDIS_KEY_PREFIX}global:popular"
+            pipe.delete(key_pop)
+            pipe.rpush(key_pop, *to_native(popular_items))
+            pipe.expire(key_pop, settings.REDIS_EXPIRE_SECONDS)
         
         # 执行 Pipeline
         # 实际生产中如果数据量过大(>10w)，应分批 execute，这里为演示一次性提交
@@ -106,8 +119,12 @@ def main():
         rec_related = engine.get_related_items(iid)
         item_recommendations[iid] = rec_related
 
-    # 5. 结果落库
-    save_results_to_redis(user_recommendations, item_recommendations)
+    # 5. 计算全局热门 (Cold Start)
+    logger.info("计算全局热门推荐...")
+    popular_items = engine.get_popular_items()
+
+    # 6. 结果落库
+    save_results_to_redis(user_recommendations, item_recommendations, popular_items)
 
     elapsed = time.time() - start_time
     logger.info(f"=== 任务完成，耗时: {elapsed:.2f} 秒 ===")

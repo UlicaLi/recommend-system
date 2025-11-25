@@ -5,7 +5,7 @@ from typing import Optional
 class Settings:
     # --- Database Configuration ---
     # 建议通过环境变量注入: export DB_URL="mysql+pymysql://user:pass@host:3306/dbname"
-    DB_URL: str = os.getenv("DB_URL", "mysql+pymysql://root:root@127.0.0.1:3306/tool_db")
+    DB_URL: str = os.getenv("DB_URL", "mysql+pymysql://root:mysqlroot@127.0.0.1:3306/rec_sys")
     
     # --- Redis Configuration ---
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
